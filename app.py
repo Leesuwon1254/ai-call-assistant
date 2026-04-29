@@ -1,4 +1,6 @@
 import os
+import json
+import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -12,15 +14,88 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
-
 UPLOAD_FOLDER = "uploads"
+DB_PATH = "calls.db"
 ALLOWED_EXTENSIONS = {"mp3", "m4a", "wav", "ogg", "webm"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
+# ── DB 초기화 ─────────────────────────────────────────────
+def get_db():
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    return db
+
+
+def init_db():
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_name TEXT,
+            transcript TEXT,
+            summary TEXT,
+            important_points TEXT,
+            appointment TEXT,
+            extracted TEXT,
+            followups TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    db.commit()
+    db.close()
+
+
+init_db()
+
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# ── GPT 분석 ─────────────────────────────────────────────
+GPT_PROMPT = """다음은 영업 통화 내용입니다. 아래 항목을 분석해서 반드시 JSON 형식으로만 응답하세요.
+
+{
+  "summary": "전체 요약 (3~4문장)",
+  "important_points": ["핵심내용1", "핵심내용2"],
+  "appointment": {
+    "title": "일정명",
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM",
+    "location": "장소"
+  },
+  "extracted": {
+    "name": "고객 이름",
+    "company": "회사명",
+    "phone": "전화번호",
+    "amount": "금액",
+    "date": "날짜",
+    "time": "시간",
+    "location": "장소"
+  },
+  "followups": ["후속조치1", "후속조치2"]
+}
+
+항목을 찾을 수 없으면 빈 문자열 또는 빈 배열로 채워줘.
+
+통화 내용:
+"""
+
+
+def analyze_with_gpt(transcript):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "당신은 영업 통화 분석 전문가입니다. 반드시 JSON 형식으로만 응답하세요."},
+            {"role": "user", "content": GPT_PROMPT + transcript},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.3,
+    )
+    raw = response.choices[0].message.content
+    return json.loads(raw)
 
 
 # ── 홈 화면 ──────────────────────────────────────────────
@@ -70,65 +145,65 @@ def upload():
                     language="ko",
                 )
             transcript = transcript_result.text
-
-            # 변환된 텍스트를 txt 파일로 저장
-            transcript_path = filepath + ".txt"
-            with open(transcript_path, "w", encoding="utf-8") as f:
-                f.write(transcript)
-
-            flash("음성 변환이 완료되었습니다!", "success")
-            return redirect(url_for("result", filename=filename))
-
         except Exception as e:
             flash(f"음성 변환 중 오류가 발생했습니다: {str(e)}", "danger")
             return redirect(request.url)
+
+        # GPT 분석 호출
+        try:
+            analysis = analyze_with_gpt(transcript)
+        except json.JSONDecodeError:
+            flash("GPT 응답 파싱에 실패했습니다. 다시 시도해주세요.", "danger")
+            return redirect(request.url)
+        except Exception as e:
+            flash(f"GPT 분석 중 오류가 발생했습니다: {str(e)}", "danger")
+            return redirect(request.url)
+
+        # DB 저장
+        db = get_db()
+        cursor = db.execute(
+            """INSERT INTO calls (file_name, transcript, summary, important_points, appointment, extracted, followups)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                filename,
+                transcript,
+                analysis.get("summary", ""),
+                json.dumps(analysis.get("important_points", []), ensure_ascii=False),
+                json.dumps(analysis.get("appointment", {}), ensure_ascii=False),
+                json.dumps(analysis.get("extracted", {}), ensure_ascii=False),
+                json.dumps(analysis.get("followups", []), ensure_ascii=False),
+            ),
+        )
+        call_id = cursor.lastrowid
+        db.commit()
+        db.close()
+
+        flash("분석이 완료되었습니다!", "success")
+        return redirect(url_for("result", call_id=call_id))
 
     return render_template("upload.html")
 
 
 # ── 분석 결과 화면 ─────────────────────────────────────────
-@app.route("/result/<filename>")
-def result(filename):
-    # transcript 파일 읽기
-    transcript_path = os.path.join(app.config["UPLOAD_FOLDER"], filename + ".txt")
-    transcript = None
-    if os.path.exists(transcript_path):
-        with open(transcript_path, "r", encoding="utf-8") as f:
-            transcript = f.read()
+@app.route("/result/<int:call_id>")
+def result(call_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM calls WHERE id = ?", (call_id,)).fetchone()
+    db.close()
 
-    # TODO: GPT 분석 결과로 교체 (Phase 2)
-    dummy = {
-        "filename": filename,
-        "summary": "김철수 부장님과 신규 프로젝트 견적 및 미팅 일정을 논의했습니다. 총 예산 1,500만원 규모의 웹 개발 프로젝트이며, 다음 주 화요일 오전 10시에 대면 미팅을 확정했습니다.",
-        "important_points": [
-            "프로젝트 예산: 1,500만원",
-            "납기일: 3개월 (2월 말)",
-            "기술 스택: React + Node.js 요청",
-            "추가 요구사항: 모바일 앱 연동 가능 여부 확인 필요",
-            "결제 조건: 착수금 30%, 중도금 40%, 잔금 30%",
-        ],
-        "appointment": {
-            "title": "ABC컴퍼니 프로젝트 미팅",
-            "date": "2025-01-28",
-            "time": "10:00",
-            "location": "ABC컴퍼니 본사 3층 회의실",
-        },
-        "extracted": {
-            "name": "김철수",
-            "company": "ABC컴퍼니",
-            "phone": "010-1234-5678",
-            "amount": "1,500만원",
-            "date": "2025-01-28",
-            "time": "오전 10시",
-            "location": "ABC컴퍼니 본사 3층 회의실",
-        },
-        "followups": [
-            "모바일 앱 연동 가능 여부 내부 검토 후 회신",
-            "React + Node.js 기반 견적서 재작성",
-            "계약서 초안 준비",
-        ],
+    if row is None:
+        flash("분석 결과를 찾을 수 없습니다.", "danger")
+        return redirect(url_for("upload"))
+
+    data = {
+        "filename": row["file_name"],
+        "summary": row["summary"],
+        "important_points": json.loads(row["important_points"]),
+        "appointment": json.loads(row["appointment"]),
+        "extracted": json.loads(row["extracted"]),
+        "followups": json.loads(row["followups"]),
     }
-    return render_template("result.html", data=dummy, transcript=transcript)
+    return render_template("result.html", data=data, transcript=row["transcript"])
 
 
 # ── 고객관리 화면 ─────────────────────────────────────────
