@@ -1,7 +1,8 @@
 import os
 import json
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+import datetime
+from flask import Flask, render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -137,7 +138,6 @@ def analyze_with_gpt(transcript):
 # ── 홈 화면 ──────────────────────────────────────────────
 @app.route("/")
 def index():
-    import datetime
     today = datetime.date.today().isoformat()
     week_ago = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
 
@@ -263,7 +263,7 @@ def upload():
             company=ext.get("company", ""),
             phone=ext.get("phone", ""),
             next_action=followups_list[0] if followups_list else "",
-            call_date=ext.get("date", "") or __import__("datetime").date.today().isoformat(),
+            call_date=ext.get("date", "") or datetime.date.today().isoformat(),
         )
 
         flash("분석이 완료되었습니다!", "success")
