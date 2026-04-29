@@ -1,9 +1,17 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
+
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
 
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"mp3", "m4a", "wav", "ogg", "webm"}
@@ -39,23 +47,56 @@ def upload():
         if file.filename == "":
             flash("파일을 선택해주세요.", "danger")
             return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-            file.save(filepath)
-            flash("파일 업로드 완료! 분석을 시작합니다.", "success")
-            # TODO: Phase 1 — STT + GPT 분석 호출
-            return redirect(url_for("result", filename=filename))
-        else:
+        if not allowed_file(file.filename):
             flash("지원하지 않는 파일 형식입니다. (mp3, m4a, wav, ogg, webm)", "danger")
+            return redirect(request.url)
+
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(filepath)
+
+        # 25MB 초과 체크
+        if os.path.getsize(filepath) > MAX_FILE_SIZE:
+            os.remove(filepath)
+            flash("파일 크기가 25MB를 초과합니다. 더 작은 파일을 업로드해주세요.", "danger")
+            return redirect(request.url)
+
+        # Whisper STT 호출
+        try:
+            with open(filepath, "rb") as audio_file:
+                transcript_result = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="ko",
+                )
+            transcript = transcript_result.text
+
+            # 변환된 텍스트를 txt 파일로 저장
+            transcript_path = filepath + ".txt"
+            with open(transcript_path, "w", encoding="utf-8") as f:
+                f.write(transcript)
+
+            flash("음성 변환이 완료되었습니다!", "success")
+            return redirect(url_for("result", filename=filename))
+
+        except Exception as e:
+            flash(f"음성 변환 중 오류가 발생했습니다: {str(e)}", "danger")
+            return redirect(request.url)
+
     return render_template("upload.html")
 
 
 # ── 분석 결과 화면 ─────────────────────────────────────────
 @app.route("/result/<filename>")
 def result(filename):
-    # TODO: DB에서 분석 결과 가져오기
-    # 지금은 더미 데이터로 UI 확인
+    # transcript 파일 읽기
+    transcript_path = os.path.join(app.config["UPLOAD_FOLDER"], filename + ".txt")
+    transcript = None
+    if os.path.exists(transcript_path):
+        with open(transcript_path, "r", encoding="utf-8") as f:
+            transcript = f.read()
+
+    # TODO: GPT 분석 결과로 교체 (Phase 2)
     dummy = {
         "filename": filename,
         "summary": "김철수 부장님과 신규 프로젝트 견적 및 미팅 일정을 논의했습니다. 총 예산 1,500만원 규모의 웹 개발 프로젝트이며, 다음 주 화요일 오전 10시에 대면 미팅을 확정했습니다.",
@@ -87,7 +128,7 @@ def result(filename):
             "계약서 초안 준비",
         ],
     }
-    return render_template("result.html", data=dummy)
+    return render_template("result.html", data=dummy, transcript=transcript)
 
 
 # ── 고객관리 화면 ─────────────────────────────────────────

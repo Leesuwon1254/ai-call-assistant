@@ -18,6 +18,19 @@
   <!-- 왼쪽: 요약 + 핵심내용 + 후속업무 -->
   <div class="col-lg-7">
 
+    <!-- 음성 변환 텍스트 -->
+    {% if transcript %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-mic me-2 text-secondary"></i>음성 변환 원문
+          <span class="badge bg-success ms-2" style="font-size:0.65rem">Whisper STT</span>
+        </h6>
+        <div class="bg-light rounded p-3" style="max-height:200px; overflow-y:auto; font-size:0.875rem; line-height:1.7; white-space:pre-wrap;">{{ transcript }}</div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- 전체 요약 -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body p-4">
