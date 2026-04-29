@@ -21,7 +21,7 @@
         <div class="stat-icon bg-primary-subtle rounded-circle mx-auto mb-2">
           <i class="bi bi-telephone-fill text-primary fs-5"></i>
         </div>
-        <div class="fw-bold fs-4">{{ recent_calls|length }}</div>
+        <div class="fw-bold fs-4">{{ week_calls }}</div>
         <div class="text-muted small">이번 주 통화</div>
       </div>
     </div>
@@ -54,7 +54,7 @@
         <div class="stat-icon bg-info-subtle rounded-circle mx-auto mb-2">
           <i class="bi bi-people text-info fs-5"></i>
         </div>
-        <div class="fw-bold fs-4">0</div>
+        <div class="fw-bold fs-4">{{ total_customers }}</div>
         <div class="text-muted small">관리 고객 수</div>
       </div>
     </div>
@@ -72,7 +72,7 @@
         {% if recent_calls %}
           <div class="list-group list-group-flush">
             {% for call in recent_calls %}
-            <a href="#" class="list-group-item list-group-item-action px-0 py-3">
+            <a href="{{ url_for('result', call_id=call.id) }}" class="list-group-item list-group-item-action px-0 py-3">
               <div class="d-flex justify-content-between">
                 <span class="fw-semibold">{{ call.customer_name }}</span>
                 <small class="text-muted">{{ call.created_at }}</small>

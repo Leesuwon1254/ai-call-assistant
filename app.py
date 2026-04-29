@@ -43,6 +43,19 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            company TEXT,
+            phone TEXT,
+            status TEXT DEFAULT '신규',
+            next_action TEXT,
+            last_call_date TEXT,
+            call_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     db.commit()
     db.close()
 
@@ -52,6 +65,29 @@ init_db()
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def upsert_customer(name, company, phone, next_action, call_date):
+    if not name:
+        return
+    db = get_db()
+    existing = db.execute(
+        "SELECT id, call_count FROM customers WHERE name = ? AND company = ?",
+        (name, company or ""),
+    ).fetchone()
+    if existing:
+        db.execute(
+            "UPDATE customers SET last_call_date = ?, call_count = ?, phone = ?, next_action = ? WHERE id = ?",
+            (call_date, existing["call_count"] + 1, phone, next_action, existing["id"]),
+        )
+    else:
+        db.execute(
+            """INSERT INTO customers (name, company, phone, next_action, last_call_date, call_count)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (name, company or "", phone or "", next_action or "", call_date),
+        )
+    db.commit()
+    db.close()
 
 
 # ── GPT 분석 ─────────────────────────────────────────────
@@ -101,14 +137,55 @@ def analyze_with_gpt(transcript):
 # ── 홈 화면 ──────────────────────────────────────────────
 @app.route("/")
 def index():
-    # TODO: DB에서 최근 통화 목록 가져오기
+    import datetime
+    today = datetime.date.today().isoformat()
+    week_ago = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
+
+    db = get_db()
+
+    # 최근 통화 5건
+    raw_calls = db.execute(
+        "SELECT id, file_name, summary, extracted, created_at FROM calls ORDER BY created_at DESC LIMIT 5"
+    ).fetchall()
     recent_calls = []
+    for row in raw_calls:
+        ext = json.loads(row["extracted"])
+        recent_calls.append({
+            "id": row["id"],
+            "customer_name": ext.get("name") or row["file_name"],
+            "summary": row["summary"],
+            "created_at": row["created_at"][:10],
+        })
+
+    # 오늘 약속
+    raw_today = db.execute(
+        "SELECT appointment FROM calls WHERE json_extract(appointment, '$.date') = ?", (today,)
+    ).fetchall()
     today_schedules = []
-    followups = []
+    for row in raw_today:
+        appt = json.loads(row["appointment"])
+        if appt.get("title"):
+            today_schedules.append(appt)
+
+    # 후속 연락 필요 (next_action 있는 고객)
+    raw_followups = db.execute(
+        "SELECT name, next_action FROM customers WHERE next_action != '' AND next_action IS NOT NULL ORDER BY last_call_date DESC LIMIT 5"
+    ).fetchall()
+    followups = [{"name": r["name"], "action": r["next_action"]} for r in raw_followups]
+
+    # 통계
+    total_customers = db.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
+    week_calls = db.execute(
+        "SELECT COUNT(*) FROM calls WHERE created_at >= ?", (week_ago,)
+    ).fetchone()[0]
+
+    db.close()
     return render_template("index.html",
                            recent_calls=recent_calls,
                            today_schedules=today_schedules,
-                           followups=followups)
+                           followups=followups,
+                           total_customers=total_customers,
+                           week_calls=week_calls)
 
 
 # ── 업로드 화면 ───────────────────────────────────────────
@@ -178,6 +255,17 @@ def upload():
         db.commit()
         db.close()
 
+        # 고객 자동 upsert
+        ext = analysis.get("extracted", {})
+        followups_list = analysis.get("followups", [])
+        upsert_customer(
+            name=ext.get("name", ""),
+            company=ext.get("company", ""),
+            phone=ext.get("phone", ""),
+            next_action=followups_list[0] if followups_list else "",
+            call_date=ext.get("date", "") or __import__("datetime").date.today().isoformat(),
+        )
+
         flash("분석이 완료되었습니다!", "success")
         return redirect(url_for("result", call_id=call_id))
 
@@ -209,60 +297,46 @@ def result(call_id):
 # ── 고객관리 화면 ─────────────────────────────────────────
 @app.route("/customers")
 def customers():
-    # TODO: DB에서 고객 목록 가져오기
-    dummy_customers = [
-        {
-            "id": 1,
-            "name": "김철수",
-            "company": "ABC컴퍼니",
-            "phone": "010-1234-5678",
-            "last_call": "2025-01-21",
-            "status": "협의중",
-            "next_action": "견적서 발송",
-            "call_count": 3,
-        },
-        {
-            "id": 2,
-            "name": "이영희",
-            "company": "XYZ코리아",
-            "phone": "010-9876-5432",
-            "last_call": "2025-01-19",
-            "status": "계약완료",
-            "next_action": "착수금 확인",
-            "call_count": 5,
-        },
-        {
-            "id": 3,
-            "name": "박민준",
-            "company": "테크스타트업",
-            "phone": "010-5555-7777",
-            "last_call": "2025-01-15",
-            "status": "검토중",
-            "next_action": "2주 후 재연락",
-            "call_count": 1,
-        },
-    ]
-    return render_template("customers.html", customers=dummy_customers)
+    db = get_db()
+    rows = db.execute(
+        "SELECT *, last_call_date AS last_call FROM customers ORDER BY last_call_date DESC"
+    ).fetchall()
+    db.close()
+    return render_template("customers.html", customers=rows)
 
 
 # ── 고객 상세 화면 ─────────────────────────────────────────
 @app.route("/customers/<int:customer_id>")
 def customer_detail(customer_id):
-    # TODO: DB에서 고객 상세 + 통화 이력 가져오기
-    dummy = {
-        "id": customer_id,
-        "name": "김철수",
-        "company": "ABC컴퍼니",
-        "phone": "010-1234-5678",
-        "status": "협의중",
-        "next_action": "견적서 발송",
-        "calls": [
-            {"date": "2025-01-21", "summary": "프로젝트 예산 및 일정 논의", "amount": "1,500만원"},
-            {"date": "2025-01-10", "summary": "초기 요구사항 파악 미팅", "amount": "-"},
-            {"date": "2024-12-28", "summary": "신규 프로젝트 문의 접수", "amount": "-"},
-        ],
-    }
-    return render_template("customer_detail.html", customer=dummy)
+    db = get_db()
+    row = db.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
+    if row is None:
+        flash("고객을 찾을 수 없습니다.", "danger")
+        return redirect(url_for("customers"))
+
+    # 해당 고객의 통화 이력 (extracted JSON name+company 일치)
+    call_rows = db.execute(
+        """SELECT id, summary, extracted, created_at FROM calls
+           WHERE json_extract(extracted, '$.name') = ?
+             AND json_extract(extracted, '$.company') = ?
+           ORDER BY created_at DESC""",
+        (row["name"], row["company"]),
+    ).fetchall()
+    db.close()
+
+    calls = []
+    for c in call_rows:
+        ext = json.loads(c["extracted"])
+        calls.append({
+            "id": c["id"],
+            "date": c["created_at"][:10],
+            "summary": c["summary"],
+            "amount": ext.get("amount") or "-",
+        })
+
+    customer = dict(row)
+    customer["calls"] = calls
+    return render_template("customer_detail.html", customer=customer)
 
 
 if __name__ == "__main__":
