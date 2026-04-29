@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}고객관리 — AI 통화비서{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-1">고객관리</h4>
+    <p class="text-muted small mb-0">통화 분석에서 자동으로 쌓인 고객 정보를 관리해요</p>
+  </div>
+  <div class="d-flex gap-2">
+    <input type="search" class="form-control form-control-sm" placeholder="이름, 회사명 검색..."
+           style="width:180px">
+    <select class="form-select form-select-sm" style="width:120px">
+      <option value="">전체 상태</option>
+      <option>협의중</option>
+      <option>계약완료</option>
+      <option>검토중</option>
+      <option>종료</option>
+    </select>
+  </div>
+</div>
+
+{% if customers %}
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-4 small fw-semibold text-muted">고객명</th>
+          <th class="small fw-semibold text-muted">회사명</th>
+          <th class="small fw-semibold text-muted d-none d-md-table-cell">연락처</th>
+          <th class="small fw-semibold text-muted d-none d-md-table-cell">마지막 통화</th>
+          <th class="small fw-semibold text-muted">상태</th>
+          <th class="small fw-semibold text-muted d-none d-lg-table-cell">다음 할 일</th>
+          <th class="small fw-semibold text-muted text-center">통화</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in customers %}
+        <tr>
+          <td class="ps-4">
+            <div class="d-flex align-items-center">
+              <div class="avatar-circle me-2">{{ c.name[0] }}</div>
+              <span class="fw-semibold small">{{ c.name }}</span>
+            </div>
+          </td>
+          <td class="small text-muted">{{ c.company }}</td>
+          <td class="small text-muted d-none d-md-table-cell">{{ c.phone }}</td>
+          <td class="small text-muted d-none d-md-table-cell">{{ c.last_call }}</td>
+          <td>
+            {% if c.status == '계약완료' %}
+              <span class="badge bg-success-subtle text-success">{{ c.status }}</span>
+            {% elif c.status == '협의중' %}
+              <span class="badge bg-primary-subtle text-primary">{{ c.status }}</span>
+            {% elif c.status == '검토중' %}
+              <span class="badge bg-warning-subtle text-warning">{{ c.status }}</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary">{{ c.status }}</span>
+            {% endif %}
+          </td>
+          <td class="small text-muted d-none d-lg-table-cell">{{ c.next_action }}</td>
+          <td class="text-center">
+            <span class="badge bg-light text-muted border">{{ c.call_count }}회</span>
+          </td>
+          <td>
+            <a href="{{ url_for('customer_detail', customer_id=c.id) }}"
+               class="btn btn-sm btn-outline-secondary">
+              상세
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+  <i class="bi bi-people text-muted" style="font-size:3rem"></i>
+  <p class="text-muted mt-3 mb-1">아직 등록된 고객이 없어요</p>
+  <p class="text-muted small">통화 분석을 완료하면 자동으로 고객이 등록됩니다</p>
+  <a href="{{ url_for('upload') }}" class="btn btn-primary mt-2">
+    <i class="bi bi-upload me-1"></i>통화 분석 시작
+  </a>
+</div>
+{% endif %}
+{% endblock %}

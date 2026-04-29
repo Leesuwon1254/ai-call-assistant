@@ -1,0 +1,63 @@
+/* ── 기본 스타일 ───────────────────────────────────── */
+body {
+  background-color: #f8f9fb;
+  color: #1a1a2e;
+}
+
+/* ── 카드 ──────────────────────────────────────────── */
+.card {
+  border-radius: 12px;
+}
+
+/* ── 통계 아이콘 원형 ───────────────────────────────── */
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 고객 아바타 ────────────────────────────────────── */
+.avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e7effe;
+  color: #2563eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.avatar-circle-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 1.3rem;
+}
+
+/* ── 업로드 드래그앤드롭 ──────────────────────────── */
+.upload-zone {
+  border-color: #c8d9ff !important;
+  transition: background 0.2s, border-color 0.2s;
+  cursor: pointer;
+}
+.upload-zone:hover {
+  background: #f0f5ff;
+  border-color: #2563eb !important;
+}
+
+/* ── 테이블 ────────────────────────────────────────── */
+.table > :not(caption) > * > * {
+  padding: 0.75rem 0.75rem;
+}
+
+/* ── 반응형 ────────────────────────────────────────── */
+@media (max-width: 576px) {
+  main.container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

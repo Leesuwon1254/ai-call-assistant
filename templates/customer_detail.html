@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.name }} — AI 통화비서{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('customers') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h4 class="fw-bold mb-0">{{ customer.name }}</h4>
+    <p class="text-muted small mb-0">{{ customer.company }}</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- 고객 정보 -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body p-4">
+        <div class="text-center mb-3">
+          <div class="avatar-circle avatar-circle-lg mx-auto mb-2">{{ customer.name[0] }}</div>
+          <h5 class="fw-bold mb-0">{{ customer.name }}</h5>
+          <p class="text-muted small">{{ customer.company }}</p>
+        </div>
+        <hr>
+        <div class="d-flex align-items-center mb-2">
+          <i class="bi bi-telephone text-muted me-2"></i>
+          <span class="small">{{ customer.phone }}</span>
+        </div>
+        <div class="d-flex align-items-center mb-3">
+          <i class="bi bi-tag text-muted me-2"></i>
+          {% if customer.status == '계약완료' %}
+            <span class="badge bg-success-subtle text-success">{{ customer.status }}</span>
+          {% elif customer.status == '협의중' %}
+            <span class="badge bg-primary-subtle text-primary">{{ customer.status }}</span>
+          {% else %}
+            <span class="badge bg-warning-subtle text-warning">{{ customer.status }}</span>
+          {% endif %}
+        </div>
+        <div class="bg-light rounded-2 p-3">
+          <p class="small text-muted mb-1">다음 할 일</p>
+          <p class="small fw-semibold mb-0">{{ customer.next_action }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-2">
+      <a href="{{ url_for('upload') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-upload me-1"></i>새 통화 분석 추가
+      </a>
+      <button class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-pencil me-1"></i>고객 정보 수정
+      </button>
+    </div>
+  </div>
+
+  <!-- 통화 이력 -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-clock-history me-2 text-primary"></i>통화 이력
+          <span class="badge bg-primary-subtle text-primary ms-1">{{ customer.calls|length }}건</span>
+        </h6>
+      </div>
+      <div class="card-body p-4">
+        {% if customer.calls %}
+          {% for call in customer.calls %}
+          <div class="d-flex mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}">
+            <div class="me-3 text-center" style="min-width:64px">
+              <div class="small text-muted">{{ call.date[:7] }}</div>
+              <div class="small fw-bold">{{ call.date[8:] }}</div>
+            </div>
+            <div class="flex-grow-1">
+              <div class="d-flex justify-content-between align-items-start">
+                <p class="small fw-semibold mb-1">{{ call.summary }}</p>
+                {% if call.amount != '-' %}
+                <span class="badge bg-danger-subtle text-danger ms-2 flex-shrink-0">
+                  {{ call.amount }}
+                </span>
+                {% endif %}
+              </div>
+              <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:0.75rem">
+                <i class="bi bi-chevron-down me-1"></i>상세 보기
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted small text-center py-3">통화 이력이 없어요</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

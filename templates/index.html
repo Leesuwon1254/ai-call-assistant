@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}홈 — AI 통화비서{% endblock %}
+
+{% block content %}
+<!-- 헤더 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-1">대시보드</h4>
+    <p class="text-muted mb-0 small">오늘도 영업 통화를 스마트하게 관리하세요</p>
+  </div>
+  <a href="{{ url_for('upload') }}" class="btn btn-primary">
+    <i class="bi bi-upload me-2"></i>통화 분석 시작
+  </a>
+</div>
+
+<!-- 요약 카드 3개 -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center py-3">
+        <div class="stat-icon bg-primary-subtle rounded-circle mx-auto mb-2">
+          <i class="bi bi-telephone-fill text-primary fs-5"></i>
+        </div>
+        <div class="fw-bold fs-4">{{ recent_calls|length }}</div>
+        <div class="text-muted small">이번 주 통화</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center py-3">
+        <div class="stat-icon bg-success-subtle rounded-circle mx-auto mb-2">
+          <i class="bi bi-calendar-check text-success fs-5"></i>
+        </div>
+        <div class="fw-bold fs-4">{{ today_schedules|length }}</div>
+        <div class="text-muted small">오늘 일정</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center py-3">
+        <div class="stat-icon bg-warning-subtle rounded-circle mx-auto mb-2">
+          <i class="bi bi-bell text-warning fs-5"></i>
+        </div>
+        <div class="fw-bold fs-4">{{ followups|length }}</div>
+        <div class="text-muted small">후속 연락 필요</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center py-3">
+        <div class="stat-icon bg-info-subtle rounded-circle mx-auto mb-2">
+          <i class="bi bi-people text-info fs-5"></i>
+        </div>
+        <div class="fw-bold fs-4">0</div>
+        <div class="text-muted small">관리 고객 수</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- 최근 통화 분석 -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>최근 통화 분석</h6>
+      </div>
+      <div class="card-body">
+        {% if recent_calls %}
+          <div class="list-group list-group-flush">
+            {% for call in recent_calls %}
+            <a href="#" class="list-group-item list-group-item-action px-0 py-3">
+              <div class="d-flex justify-content-between">
+                <span class="fw-semibold">{{ call.customer_name }}</span>
+                <small class="text-muted">{{ call.created_at }}</small>
+              </div>
+              <small class="text-muted">{{ call.summary[:60] }}...</small>
+            </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-5">
+            <i class="bi bi-telephone-x text-muted" style="font-size:2.5rem"></i>
+            <p class="text-muted mt-3 mb-1">아직 분석된 통화가 없어요</p>
+            <a href="{{ url_for('upload') }}" class="btn btn-sm btn-primary mt-2">
+              <i class="bi bi-upload me-1"></i>첫 통화 분석하기
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 오늘 일정 + 후속 연락 -->
+  <div class="col-lg-5">
+    <!-- 오늘 일정 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-calendar3 me-2 text-success"></i>오늘 일정</h6>
+      </div>
+      <div class="card-body">
+        {% if today_schedules %}
+          {% for s in today_schedules %}
+          <div class="d-flex align-items-start mb-2">
+            <span class="badge bg-success-subtle text-success me-2 mt-1">{{ s.time }}</span>
+            <div>
+              <div class="small fw-semibold">{{ s.title }}</div>
+              <div class="small text-muted">{{ s.location }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted small text-center py-2 mb-0">오늘 등록된 일정이 없어요</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 후속 연락 필요 -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-bell me-2 text-warning"></i>후속 연락 필요</h6>
+      </div>
+      <div class="card-body">
+        {% if followups %}
+          {% for f in followups %}
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div>
+              <div class="small fw-semibold">{{ f.name }}</div>
+              <div class="small text-muted">{{ f.action }}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-primary">연락</button>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted small text-center py-2 mb-0">후속 연락 항목이 없어요</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
