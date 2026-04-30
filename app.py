@@ -12,8 +12,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
-# OpenAI 클라이언트 — 환경변수에서 자동으로 읽음 (OPENAI_API_KEY)
-client = OpenAI()
 
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -130,7 +128,19 @@ GPT_PROMPT = """다음은 영업 통화 내용입니다. 아래 항목을 분석
 """
 
 
+def transcribe_audio(filepath):
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    with open(filepath, "rb") as audio_file:
+        result = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            language="ko",
+        )
+    return result.text
+
+
 def analyze_with_gpt(transcript):
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -224,13 +234,7 @@ def upload():
 
         # Whisper STT 호출
         try:
-            with open(filepath, "rb") as audio_file:
-                transcript_result = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    language="ko",
-                )
-            transcript = transcript_result.text
+            transcript = transcribe_audio(filepath)
         except Exception as e:
             flash(f"음성 변환 중 오류가 발생했습니다: {str(e)}", "danger")
             return redirect(request.url)
