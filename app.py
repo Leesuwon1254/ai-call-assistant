@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import Flow
+from requests_oauthlib import OAuth2Session
 from googleapiclient.discovery import build
 
 load_dotenv()
@@ -78,18 +78,8 @@ except Exception as e:
 # ── Google Calendar ────────────────────────────────────────
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
-
-
-def _google_client_config():
-    return {
-        "web": {
-            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
-            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [os.environ.get("GOOGLE_REDIRECT_URI", "")],
-        }
-    }
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 def get_google_credentials():
@@ -396,30 +386,49 @@ def auto_upload():
 # ── Google Calendar 라우트 ────────────────────────────────
 @app.route("/calendar/auth")
 def calendar_auth():
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
     redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
-    if not redirect_uri:
-        flash("GOOGLE_REDIRECT_URI 환경변수가 설정되지 않았습니다.", "danger")
+    if not client_id or not redirect_uri:
+        flash("Google 환경변수(GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI)가 설정되지 않았습니다.", "danger")
         return redirect(url_for("index"))
-    flow = Flow.from_client_config(
-        _google_client_config(), scopes=SCOPES, redirect_uri=redirect_uri
+
+    oauth = OAuth2Session(client_id, scope=SCOPES, redirect_uri=redirect_uri)
+    auth_url, state = oauth.authorization_url(
+        GOOGLE_AUTH_URL,
+        access_type="offline",
+        prompt="consent",
     )
-    auth_url, state = flow.authorization_url(prompt="consent", access_type="offline")
     session["oauth_state"] = state
     return redirect(auth_url)
 
 
 @app.route("/calendar/callback")
 def calendar_callback():
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
     redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
-    flow = Flow.from_client_config(
-        _google_client_config(),
-        scopes=SCOPES,
-        redirect_uri=redirect_uri,
-        state=session.get("oauth_state"),
-    )
+
     try:
-        flow.fetch_token(authorization_response=request.url)
-        creds = flow.credentials
+        oauth = OAuth2Session(
+            client_id,
+            redirect_uri=redirect_uri,
+            state=session.get("oauth_state"),
+        )
+        # Render는 HTTPS지만 내부 request.url이 http일 수 있으므로 강제 변환
+        callback_url = request.url.replace("http://", "https://")
+        token = oauth.fetch_token(
+            GOOGLE_TOKEN_URL,
+            authorization_response=callback_url,
+            client_secret=client_secret,
+        )
+        creds = Credentials(
+            token=token["access_token"],
+            refresh_token=token.get("refresh_token"),
+            token_uri=GOOGLE_TOKEN_URL,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=SCOPES,
+        )
         with open(TOKEN_PATH, "w") as f:
             f.write(creds.to_json())
         flash("Google Calendar 연동이 완료되었습니다!", "success")
