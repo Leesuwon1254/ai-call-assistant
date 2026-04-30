@@ -1,6 +1,15 @@
-const APP_VERSION = "v1.0.0";
+const APP_VERSION = "v1.1.0";
 
 const VERSION_HISTORY = [
+  {
+    version: "v1.1.0",
+    date: "2026-04-30",
+    changes: [
+      "Google 토큰 DB 저장 (재배포 후 재연동 불필요)",
+      "통화 분석 완료 시 Google Calendar 자동 등록",
+      "약속 정보 없을 시 캘린더 버튼 자동 숨김"
+    ]
+  },
   {
     version: "v1.0.0",
     date: "2026-04-30",

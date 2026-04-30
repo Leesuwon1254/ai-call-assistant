@@ -113,6 +113,34 @@ def load_token() -> str | None:
     return row["token_data"] if row else None
 
 
+def auto_register_calendar(appointment):
+    """약속 정보를 Google Calendar에 자동 등록. 성공 시 True 반환."""
+    if not appointment.get("date"):
+        return False
+    creds = get_google_credentials()
+    if not creds:
+        return False
+    try:
+        service = build("calendar", "v3", credentials=creds)
+        date = appointment["date"]
+        time_val = appointment.get("time", "")
+        title = appointment.get("title") or "약속"
+        location = appointment.get("location", "")
+        if time_val:
+            start_dt = datetime.datetime.fromisoformat(f"{date}T{time_val}:00")
+            end_dt = start_dt + datetime.timedelta(hours=1)
+            start = {"dateTime": start_dt.isoformat(), "timeZone": "Asia/Seoul"}
+            end = {"dateTime": end_dt.isoformat(), "timeZone": "Asia/Seoul"}
+        else:
+            start = {"date": date}
+            end = {"date": date}
+        event = {"summary": title, "location": location, "start": start, "end": end}
+        service.events().insert(calendarId="primary", body=event).execute()
+        return True
+    except Exception:
+        return False
+
+
 def get_google_credentials():
     token_data = load_token()
     if not token_data:
@@ -338,6 +366,11 @@ def upload():
             call_date=ext.get("date", "") or datetime.date.today().isoformat(),
         )
 
+        # Google Calendar 자동 등록 시도
+        appt = analysis.get("appointment", {})
+        calendar_registered = auto_register_calendar(appt)
+        session["calendar_registered"] = calendar_registered
+
         flash("분석이 완료되었습니다!", "success")
         return redirect(url_for("result", call_id=call_id))
 
@@ -363,7 +396,15 @@ def result(call_id):
         "extracted": json.loads(row["extracted"]),
         "followups": json.loads(row["followups"]),
     }
-    return render_template("result.html", data=data, transcript=row["transcript"])
+    calendar_registered = session.pop("calendar_registered", None)
+    google_connected = get_google_credentials() is not None
+    return render_template(
+        "result.html",
+        data=data,
+        transcript=row["transcript"],
+        calendar_registered=calendar_registered,
+        google_connected=google_connected,
+    )
 
 
 # ── 고객관리 화면 ─────────────────────────────────────────

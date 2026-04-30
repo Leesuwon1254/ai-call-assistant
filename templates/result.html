@@ -121,42 +121,68 @@
     </div>
 
     <!-- 약속 내용 + 일정 등록 -->
-    <div class="card border-0 shadow-sm mb-3 border-start border-4 border-primary">
+    {% if data.appointment.date or calendar_registered %}
+    <div class="card border-0 shadow-sm mb-3 border-start border-4
+        {% if calendar_registered %}border-success{% else %}border-primary{% endif %}">
       <div class="card-body p-4">
         <h6 class="fw-bold mb-3">
-          <i class="bi bi-calendar-event me-2 text-primary"></i>약속 내용
+          <i class="bi bi-calendar-event me-2
+            {% if calendar_registered %}text-success{% else %}text-primary{% endif %}"></i>약속 내용
         </h6>
-        <form id="calendarForm">
+
+        <!-- 약속 정보 표시 -->
+        <div class="mb-3">
           <div class="mb-2">
             <label class="form-label small text-muted mb-1">일정명</label>
-            <input type="text" name="title" class="form-control form-control-sm"
+            <input type="text" id="appt_title" class="form-control form-control-sm"
                    value="{{ data.appointment.title }}">
           </div>
           <div class="row g-2 mb-2">
             <div class="col-6">
               <label class="form-label small text-muted mb-1">날짜</label>
-              <input type="date" name="date" class="form-control form-control-sm"
+              <input type="date" id="appt_date" class="form-control form-control-sm"
                      value="{{ data.appointment.date }}">
             </div>
             <div class="col-6">
               <label class="form-label small text-muted mb-1">시간</label>
-              <input type="time" name="time" class="form-control form-control-sm"
+              <input type="time" id="appt_time" class="form-control form-control-sm"
                      value="{{ data.appointment.time }}">
             </div>
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted mb-1">장소</label>
-            <input type="text" name="location" class="form-control form-control-sm"
+            <input type="text" id="appt_location" class="form-control form-control-sm"
                    value="{{ data.appointment.location }}">
           </div>
+        </div>
+
+        {% if calendar_registered %}
+          <!-- 자동 등록 완료 -->
+          <div class="alert alert-success py-2 mb-0 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <span class="small fw-semibold">Google Calendar 자동 등록 완료</span>
+          </div>
+
+        {% elif google_connected %}
+          <!-- 연동됨 but 자동 등록 안됨 → 수동 등록 버튼 -->
           <button type="button" id="calendarBtn" class="btn btn-primary w-100 btn-sm"
                   onclick="addToCalendar()">
             <i class="bi bi-google me-2"></i>Google Calendar 등록
           </button>
           <div id="calendarResult" class="mt-2 d-none"></div>
-        </form>
+
+        {% else %}
+          <!-- 미연동 → 연동 안내 -->
+          <a href="{{ url_for('calendar_auth') }}" class="btn btn-outline-primary w-100 btn-sm">
+            <i class="bi bi-google me-2"></i>Google 계정 연동 후 등록
+          </a>
+          <p class="text-muted mt-2 mb-0 small text-center">
+            연동하면 다음부터 자동으로 등록됩니다
+          </p>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- 고객 저장 버튼 -->
     <div class="d-grid">
@@ -173,12 +199,16 @@
 async function addToCalendar() {
   const btn = document.getElementById('calendarBtn');
   const resultDiv = document.getElementById('calendarResult');
-  const form = document.getElementById('calendarForm');
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>등록 중...';
 
-  const data = new FormData(form);
+  const data = new FormData();
+  data.append('title',    document.getElementById('appt_title')?.value    || '');
+  data.append('date',     document.getElementById('appt_date')?.value     || '');
+  data.append('time',     document.getElementById('appt_time')?.value     || '');
+  data.append('location', document.getElementById('appt_location')?.value || '');
+
   try {
     const res = await fetch('/calendar/add', { method: 'POST', body: data });
     const json = await res.json();
