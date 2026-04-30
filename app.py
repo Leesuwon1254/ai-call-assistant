@@ -12,14 +12,20 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# OpenAI 클라이언트 — 환경변수에서 자동으로 읽음 (OPENAI_API_KEY)
+client = OpenAI()
 
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
-UPLOAD_FOLDER = "uploads"
-DB_PATH = "calls.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+DB_PATH = os.path.join(BASE_DIR, "calls.db")
 ALLOWED_EXTENSIONS = {"mp3", "m4a", "wav", "ogg", "webm"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+try:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+except OSError as e:
+    print(f"[WARNING] uploads 폴더 생성 실패: {e}")
 
 
 # ── DB 초기화 ─────────────────────────────────────────────
@@ -61,7 +67,10 @@ def init_db():
     db.close()
 
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f"[ERROR] DB 초기화 실패: {e}")
 
 
 def allowed_file(filename):
