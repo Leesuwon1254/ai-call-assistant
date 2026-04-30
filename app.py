@@ -387,6 +387,12 @@ def customer_detail(customer_id):
     return render_template("customer_detail.html", customer=customer)
 
 
+# ── 자동 업로드 안내 ──────────────────────────────────────
+@app.route("/auto-upload")
+def auto_upload():
+    return render_template("auto_upload.html")
+
+
 # ── Google Calendar 라우트 ────────────────────────────────
 @app.route("/calendar/auth")
 def calendar_auth():

@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}자동 업로드 — AI 통화비서{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+
+    <div class="mb-4">
+      <h4 class="fw-bold mb-1">
+        <i class="bi bi-phone me-2 text-primary"></i>Android 자동 업로드
+      </h4>
+      <p class="text-muted small">통화 녹음 파일을 바로 선택해서 AI 분석을 시작하세요</p>
+    </div>
+
+    <!-- 바로 업로드 카드 -->
+    <div class="card border-0 shadow-sm mb-4 border-start border-4 border-primary">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-cloud-upload me-2 text-primary"></i>최근 녹음 파일 업로드
+        </h6>
+        <p class="small text-muted mb-3">
+          파일을 선택하면 즉시 AI 분석이 시작됩니다.
+        </p>
+
+        <!-- 숨겨진 업로드 폼 -->
+        <form id="autoUploadForm" method="POST" action="{{ url_for('upload') }}"
+              enctype="multipart/form-data">
+          <input type="file" id="autoFileInput" name="file"
+                 accept=".mp3,.m4a,.wav,.ogg,.webm" class="d-none">
+        </form>
+
+        <button class="btn btn-primary w-100 py-3" onclick="document.getElementById('autoFileInput').click()">
+          <i class="bi bi-folder2-open me-2 fs-5"></i>
+          <span class="fw-semibold">녹음 파일 선택하기</span>
+          <div class="small opacity-75 mt-1">mp3, m4a, wav, ogg, webm · 최대 25MB</div>
+        </button>
+
+        <!-- 선택된 파일 정보 + 진행상태 -->
+        <div id="fileSelectedInfo" class="d-none mt-3">
+          <div class="alert alert-info py-2 mb-2">
+            <i class="bi bi-file-earmark-music me-2"></i>
+            <span id="selectedFileName"></span>
+            <span class="badge bg-info ms-2" id="selectedFileSize"></span>
+          </div>
+          <div class="d-flex align-items-center text-muted small">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            AI 분석 중입니다... 잠시 기다려주세요
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 홈 화면 추가 안내 -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-plus-square me-2 text-success"></i>홈 화면에 앱 추가하기
+        </h6>
+        <div class="d-flex align-items-start mb-3">
+          <span class="badge bg-primary rounded-pill me-3 mt-1 flex-shrink-0">1</span>
+          <div class="small">
+            Chrome 브라우저 우측 상단 <strong>⋮ 메뉴</strong> 클릭
+          </div>
+        </div>
+        <div class="d-flex align-items-start mb-3">
+          <span class="badge bg-primary rounded-pill me-3 mt-1 flex-shrink-0">2</span>
+          <div class="small">
+            <strong>"홈 화면에 추가"</strong> 또는 <strong>"앱 설치"</strong> 선택
+          </div>
+        </div>
+        <div class="d-flex align-items-start">
+          <span class="badge bg-primary rounded-pill me-3 mt-1 flex-shrink-0">3</span>
+          <div class="small">
+            홈 화면에서 아이콘을 탭하면 앱처럼 바로 실행됩니다
+          </div>
+        </div>
+        <div id="installBtnWrapper" class="d-none mt-3">
+          <button id="installBtn" class="btn btn-success btn-sm w-100">
+            <i class="bi bi-download me-2"></i>홈 화면에 추가
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 녹음 파일 위치 안내 -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-folder me-2 text-warning"></i>통화 녹음 파일 위치
+        </h6>
+
+        <!-- 삼성 -->
+        <div class="mb-3">
+          <div class="d-flex align-items-center mb-2">
+            <span class="badge bg-dark me-2">삼성</span>
+            <span class="small fw-semibold">Galaxy 시리즈</span>
+          </div>
+          <div class="bg-light rounded p-2 font-monospace small text-break">
+            /storage/emulated/0/Recordings/Call/
+          </div>
+          <p class="small text-muted mt-1 mb-0">
+            전화 앱 → 설정 → 통화 녹음 → 자동 녹음 활성화
+          </p>
+        </div>
+
+        <!-- LG -->
+        <div class="mb-3">
+          <div class="d-flex align-items-center mb-2">
+            <span class="badge bg-danger me-2">LG</span>
+            <span class="small fw-semibold">LG 시리즈</span>
+          </div>
+          <div class="bg-light rounded p-2 font-monospace small text-break">
+            /storage/emulated/0/LG_Backup/CallRecord/
+          </div>
+        </div>
+
+        <!-- 일반 -->
+        <div>
+          <div class="d-flex align-items-center mb-2">
+            <span class="badge bg-secondary me-2">일반</span>
+            <span class="small fw-semibold">기타 안드로이드</span>
+          </div>
+          <div class="bg-light rounded p-2 font-monospace small text-break">
+            /storage/emulated/0/DCIM/Call Recordings/
+          </div>
+          <div class="bg-light rounded p-2 font-monospace small text-break mt-1">
+            /storage/emulated/0/PhoneRecord/
+          </div>
+          <p class="small text-muted mt-1 mb-0">
+            파일 관리자 앱에서 "Call" 또는 "Record" 폴더를 검색하세요
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 파일 선택 즉시 폼 제출
+document.getElementById('autoFileInput').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+
+  document.getElementById('selectedFileName').textContent = file.name;
+  document.getElementById('selectedFileSize').textContent =
+    (file.size / 1024 / 1024).toFixed(1) + ' MB';
+  document.getElementById('fileSelectedInfo').classList.remove('d-none');
+
+  // 25MB 초과 체크
+  if (file.size > 25 * 1024 * 1024) {
+    document.querySelector('#fileSelectedInfo .spinner-border').closest('div').innerHTML =
+      '<i class="bi bi-exclamation-triangle text-danger me-2"></i><span class="text-danger">파일이 25MB를 초과합니다.</span>';
+    return;
+  }
+
+  document.getElementById('autoUploadForm').submit();
+});
+
+// PWA 설치 프롬프트
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBtnWrapper').classList.remove('d-none');
+});
+
+document.getElementById('installBtn')?.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  if (outcome === 'accepted') {
+    document.getElementById('installBtnWrapper').classList.add('d-none');
+  }
+});
+</script>
+{% endblock %}

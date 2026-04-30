@@ -8,9 +8,14 @@
     <h4 class="fw-bold mb-1">대시보드</h4>
     <p class="text-muted mb-0 small">오늘도 영업 통화를 스마트하게 관리하세요</p>
   </div>
-  <a href="{{ url_for('upload') }}" class="btn btn-primary">
-    <i class="bi bi-upload me-2"></i>통화 분석 시작
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('auto_upload') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-phone me-1"></i>자동 업로드
+    </a>
+    <a href="{{ url_for('upload') }}" class="btn btn-primary">
+      <i class="bi bi-upload me-2"></i>통화 분석 시작
+    </a>
+  </div>
 </div>
 
 <!-- 요약 카드 3개 -->
