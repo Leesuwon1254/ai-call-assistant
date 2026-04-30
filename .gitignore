@@ -7,3 +7,4 @@ uploads/
 venv/
 .venv/
 server.log
+token.json

@@ -2,10 +2,14 @@ import os
 import json
 import sqlite3
 import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 from openai import OpenAI
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 load_dotenv()
 
@@ -69,6 +73,37 @@ try:
     init_db()
 except Exception as e:
     print(f"[ERROR] DB 초기화 실패: {e}")
+
+
+# ── Google Calendar ────────────────────────────────────────
+SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+
+
+def _google_client_config():
+    return {
+        "web": {
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [os.environ.get("GOOGLE_REDIRECT_URI", "")],
+        }
+    }
+
+
+def get_google_credentials():
+    if not os.path.exists(TOKEN_PATH):
+        return None
+    creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+            with open(TOKEN_PATH, "w") as f:
+                f.write(creds.to_json())
+        except Exception:
+            return None
+    return creds if creds and creds.valid else None
 
 
 def allowed_file(filename):
@@ -350,6 +385,73 @@ def customer_detail(customer_id):
     customer = dict(row)
     customer["calls"] = calls
     return render_template("customer_detail.html", customer=customer)
+
+
+# ── Google Calendar 라우트 ────────────────────────────────
+@app.route("/calendar/auth")
+def calendar_auth():
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
+    if not redirect_uri:
+        flash("GOOGLE_REDIRECT_URI 환경변수가 설정되지 않았습니다.", "danger")
+        return redirect(url_for("index"))
+    flow = Flow.from_client_config(
+        _google_client_config(), scopes=SCOPES, redirect_uri=redirect_uri
+    )
+    auth_url, state = flow.authorization_url(prompt="consent", access_type="offline")
+    session["oauth_state"] = state
+    return redirect(auth_url)
+
+
+@app.route("/calendar/callback")
+def calendar_callback():
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
+    flow = Flow.from_client_config(
+        _google_client_config(),
+        scopes=SCOPES,
+        redirect_uri=redirect_uri,
+        state=session.get("oauth_state"),
+    )
+    try:
+        flow.fetch_token(authorization_response=request.url)
+        creds = flow.credentials
+        with open(TOKEN_PATH, "w") as f:
+            f.write(creds.to_json())
+        flash("Google Calendar 연동이 완료되었습니다!", "success")
+    except Exception as e:
+        flash(f"Google 인증 실패: {str(e)}", "danger")
+    return redirect(url_for("index"))
+
+
+@app.route("/calendar/add", methods=["POST"])
+def calendar_add():
+    creds = get_google_credentials()
+    if not creds:
+        return jsonify({"ok": False, "auth_url": url_for("calendar_auth")})
+
+    title = request.form.get("title", "일정")
+    date = request.form.get("date", "")
+    time_val = request.form.get("time", "")
+    location = request.form.get("location", "")
+
+    if not date:
+        return jsonify({"ok": False, "error": "날짜 정보가 없습니다."})
+
+    try:
+        service = build("calendar", "v3", credentials=creds)
+        if time_val:
+            start_dt = datetime.datetime.fromisoformat(f"{date}T{time_val}:00")
+            end_dt = start_dt + datetime.timedelta(hours=1)
+            start = {"dateTime": start_dt.isoformat(), "timeZone": "Asia/Seoul"}
+            end = {"dateTime": end_dt.isoformat(), "timeZone": "Asia/Seoul"}
+        else:
+            start = {"date": date}
+            end = {"date": date}
+
+        event = {"summary": title, "location": location, "start": start, "end": end}
+        result = service.events().insert(calendarId="primary", body=event).execute()
+        return jsonify({"ok": True, "event_id": result.get("id")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 if __name__ == "__main__":

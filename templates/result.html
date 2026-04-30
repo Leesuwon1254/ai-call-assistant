@@ -126,35 +126,35 @@
         <h6 class="fw-bold mb-3">
           <i class="bi bi-calendar-event me-2 text-primary"></i>약속 내용
         </h6>
-        <div class="mb-3">
+        <form id="calendarForm">
           <div class="mb-2">
             <label class="form-label small text-muted mb-1">일정명</label>
-            <input type="text" class="form-control form-control-sm"
+            <input type="text" name="title" class="form-control form-control-sm"
                    value="{{ data.appointment.title }}">
           </div>
           <div class="row g-2 mb-2">
             <div class="col-6">
               <label class="form-label small text-muted mb-1">날짜</label>
-              <input type="date" class="form-control form-control-sm"
+              <input type="date" name="date" class="form-control form-control-sm"
                      value="{{ data.appointment.date }}">
             </div>
             <div class="col-6">
               <label class="form-label small text-muted mb-1">시간</label>
-              <input type="time" class="form-control form-control-sm"
+              <input type="time" name="time" class="form-control form-control-sm"
                      value="{{ data.appointment.time }}">
             </div>
           </div>
-          <div class="mb-2">
+          <div class="mb-3">
             <label class="form-label small text-muted mb-1">장소</label>
-            <input type="text" class="form-control form-control-sm"
+            <input type="text" name="location" class="form-control form-control-sm"
                    value="{{ data.appointment.location }}">
           </div>
-        </div>
-        <!-- Phase 3에서 Google Calendar API 연동 -->
-        <button class="btn btn-primary w-100 btn-sm" disabled>
-          <i class="bi bi-google me-2"></i>Google Calendar 등록
-          <span class="badge bg-white text-primary ms-1" style="font-size:0.65rem">Phase 3</span>
-        </button>
+          <button type="button" id="calendarBtn" class="btn btn-primary w-100 btn-sm"
+                  onclick="addToCalendar()">
+            <i class="bi bi-google me-2"></i>Google Calendar 등록
+          </button>
+          <div id="calendarResult" class="mt-2 d-none"></div>
+        </form>
       </div>
     </div>
 
@@ -166,4 +166,46 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function addToCalendar() {
+  const btn = document.getElementById('calendarBtn');
+  const resultDiv = document.getElementById('calendarResult');
+  const form = document.getElementById('calendarForm');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>등록 중...';
+
+  const data = new FormData(form);
+  try {
+    const res = await fetch('/calendar/add', { method: 'POST', body: data });
+    const json = await res.json();
+
+    if (json.ok) {
+      btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>등록 완료!';
+      btn.classList.replace('btn-primary', 'btn-success');
+      resultDiv.className = 'mt-2 alert alert-success py-2 small';
+      resultDiv.textContent = 'Google Calendar에 일정이 등록되었습니다.';
+    } else if (json.auth_url) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-google me-2"></i>Google 계정 연동 필요';
+      resultDiv.className = 'mt-2 alert alert-warning py-2 small';
+      resultDiv.innerHTML = `<a href="${json.auth_url}">여기를 클릭</a>해서 Google 계정을 먼저 연동해주세요.`;
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-google me-2"></i>Google Calendar 등록';
+      resultDiv.className = 'mt-2 alert alert-danger py-2 small';
+      resultDiv.textContent = json.error || '등록 중 오류가 발생했습니다.';
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-google me-2"></i>Google Calendar 등록';
+    resultDiv.className = 'mt-2 alert alert-danger py-2 small';
+    resultDiv.textContent = '네트워크 오류가 발생했습니다.';
+  }
+  resultDiv.classList.remove('d-none');
+}
+</script>
 {% endblock %}
