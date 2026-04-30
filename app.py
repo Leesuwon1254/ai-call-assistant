@@ -65,6 +65,14 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS tokens (
+            id INTEGER PRIMARY KEY,
+            user_id TEXT DEFAULT 'default',
+            token_data TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     db.commit()
     db.close()
 
@@ -77,20 +85,46 @@ except Exception as e:
 
 # ── Google Calendar ────────────────────────────────────────
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
+def save_token(token_data: str):
+    db = get_db()
+    existing = db.execute("SELECT id FROM tokens WHERE user_id = 'default'").fetchone()
+    if existing:
+        db.execute(
+            "UPDATE tokens SET token_data = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = 'default'",
+            (token_data,),
+        )
+    else:
+        db.execute(
+            "INSERT INTO tokens (user_id, token_data) VALUES ('default', ?)",
+            (token_data,),
+        )
+    db.commit()
+    db.close()
+
+
+def load_token() -> str | None:
+    db = get_db()
+    row = db.execute("SELECT token_data FROM tokens WHERE user_id = 'default'").fetchone()
+    db.close()
+    return row["token_data"] if row else None
+
+
 def get_google_credentials():
-    if not os.path.exists(TOKEN_PATH):
+    token_data = load_token()
+    if not token_data:
         return None
-    creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    try:
+        creds = Credentials.from_authorized_user_info(json.loads(token_data), SCOPES)
+    except Exception:
+        return None
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            with open(TOKEN_PATH, "w") as f:
-                f.write(creds.to_json())
+            save_token(creds.to_json())
         except Exception:
             return None
     return creds if creds and creds.valid else None
@@ -429,8 +463,7 @@ def calendar_callback():
             client_secret=client_secret,
             scopes=SCOPES,
         )
-        with open(TOKEN_PATH, "w") as f:
-            f.write(creds.to_json())
+        save_token(creds.to_json())
         flash("Google Calendar 연동이 완료되었습니다!", "success")
     except Exception as e:
         flash(f"Google 인증 실패: {str(e)}", "danger")
